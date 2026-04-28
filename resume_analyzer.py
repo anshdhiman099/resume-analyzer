@@ -3,13 +3,21 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Expanded skills database
-SKILLS_DB = [
+SKILLS_DB = {  "technical" : [
     "python", "java", "c++", "javascript", "sql",
     "machine learning", "data analysis", "html", "css",
     "react", "angular", "node", "django", "flask",
     "git", "mongodb", "excel", "power bi"
-]
-
+],
+"business" : ["sales marketing", "sales", "management", "leadership", "teamwork"
+],
+"finance": [
+        "accounting", "financial analysis", "excel", "budgeting", "tax", "auditing"
+    ],
+"general": [
+        "problem solving", "time management" "adaptability", "critical thinking"
+        ]
+}
 
 def extract_text_from_pdf(pdf_file):
     text = ""
