@@ -1,132 +1,99 @@
 import PyPDF2
-import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+ import google.generativeai as genai
 
-# ✅ Multi-domain skills database
-SKILLS_DB = {
-    "technical": [
-        "python", "java", "c++", "javascript", "sql",
-        "machine learning", "data analysis", "html", "css",
-        "react", "angular", "node", "django", "flask",
-        "git", "mongodb", "excel", "power bi"
+# Expanded skills database
+SKILLS_DB = {  "technical" : [
+    "python", "java", "c++", "javascript", "sql",
+    "machine learning", "data analysis", "html", "css",
+    "react", "angular", "node", "django", "flask",
+    "git", "mongodb", "excel", "power bi"
+],
+"business" : ["sales marketing", "sales", "management", "leadership", "teamwork"
+],
+"finance": [
+        "accounting", "financial analysis", "excel", "budgeting", "tax", "auditing"
     ],
-    "business": [
-        "sales", "marketing", "management", "leadership", "teamwork",
-        "communication", "negotiation"
-    ],
-    "finance": [
-        "accounting", "financial analysis", "excel", "budgeting",
-        "tax", "auditing"
-    ],
-    "general": [
-        "problem solving", "time management", "adaptability",
-        "critical thinking"
-    ]
+"general": [
+        "problem solving", "time management" "adaptability", "critical thinking"
+        ]
 }
 
-
-# ✅ Clean text for better processing
-def clean_text(text):
-    text = re.sub(r'[^a-zA-Z ]', ' ', text)
-    return text.lower()
-
-
-# ✅ Extract text from PDF (optimized)
 def extract_text_from_pdf(pdf_file):
     text = ""
     reader = PyPDF2.PdfReader(pdf_file)
-
     for page in reader.pages:
         text += page.extract_text() or ""
-
-    # Limit text for speed
-    return clean_text(text[:2000])
+    return text.lower()
 
 
-# ✅ Extract skills correctly from dictionary
 def extract_skills(text):
     found_skills = []
-
-    for category in SKILLS_DB.values():
-        for skill in category:
-            if skill in text:
-                found_skills.append(skill)
-
+    for skill in SKILLS_DB:
+        if skill in text:
+            found_skills.append(skill)
     return list(set(found_skills))
 
 
-# ✅ Extract skills from job description
-def extract_jd_skills(job_description):
-    jd_skills = []
-    jd_text = job_description.lower()
-
-    for category in SKILLS_DB.values():
-        for skill in category:
-            if skill in jd_text:
-                jd_skills.append(skill)
-
-    return list(set(jd_skills))
-
-
-# ✅ Improved similarity using TF-IDF
 def calculate_similarity(resume_text, job_description):
-    vectorizer = TfidfVectorizer(stop_words="english", max_features=1000)
+    # TF-IDF based similarity (better than CountVectorizer)
+    vectorizer = TfidfVectorizer(stop_words="english")
     tfidf = vectorizer.fit_transform([resume_text, job_description])
 
     score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
-    return score * 100
+    return round(score * 100, 2)
 
 
-# ✅ Main analysis function
 def analyze_resume(pdf_file, job_description):
+    text = extract_text_from_pdf(pdf_file)
 
-    resume_text = extract_text_from_pdf(pdf_file)
-    job_description = clean_text(job_description)
+    skills = extract_skills(text)
 
-    skills = extract_skills(resume_text)
-    jd_skills = extract_jd_skills(job_description)
+    # Extract JD skills properly
+    jd_skills = [skill for skill in SKILLS_DB if skill in job_description.lower()]
+    missing_skills = [skill for skill in jd_skills if skill not in skills]
 
-    # ✅ Text similarity score
-    text_score = calculate_similarity(resume_text, job_description)
+    score = calculate_similarity(text, job_description)
 
-    # ✅ Skill-based score
-    skill_match_ratio = 0
-    if jd_skills:
-        matched = [s for s in jd_skills if s in skills]
-        skill_match_ratio = len(matched) / len(jd_skills)
-
-    skill_score = skill_match_ratio * 100
-
-    # ✅ Final combined score (balanced)
-    final_score = (0.6 * text_score) + (0.4 * skill_score)
-    final_score = round(final_score, 2)
-
-    # ✅ Missing skills
-    missing_skills = [s for s in jd_skills if s not in skills]
-
-    # ✅ Suggestions
     suggestions = []
 
-    if missing_skills:
-        suggestions.append("Add these missing skills: " + ", ".join(missing_skills))
+    # Smart suggestions
 
-    if final_score < 40:
-        suggestions.append("Resume is poorly aligned with job description")
-    elif final_score < 70:
-        suggestions.append("Resume is moderately aligned, needs improvement")
-    else:
-        suggestions.append("Resume is well aligned with the job")
+genai.configure(api_key="YOUR_API_KEY")
 
-    if len(skills) < 5:
-        suggestions.append("Add more role-specific skills to strengthen your resume")
+model = genai.GenerativeModel("gemini-pro")
 
-    if not skills:
-        suggestions.append("No relevant skills detected, try improving resume content")
 
-    return {
-        "score": final_score,
-        "skills_found": skills,
-        "missing_skills": missing_skills,
-        "suggestions": suggestions
-    }
+def ai_resume_analysis(resume_text, job_description):
+
+    prompt = f"""
+    You are an ATS system.
+
+    Analyze this resume based on the job description.
+
+    Resume:
+    {resume_text}
+
+    Job Description:
+    {job_description}
+
+    Give output in this format:
+
+    Score: (0-100)
+
+    Strengths:
+    - ...
+
+    Missing Skills:
+    - ...
+
+    Suggestions:
+    - ...
+
+    Be smart and understand meaning, not just keywords.
+    """
+
+    response = model.generate_content(prompt)
+
+    return response.text
