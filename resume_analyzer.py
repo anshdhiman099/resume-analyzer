@@ -3,6 +3,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import google.generativeai as genai
 import os
+import analyze_resume
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
