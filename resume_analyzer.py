@@ -1,105 +1,129 @@
+import os
 import PyPDF2
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import google.generativeai as genai
-import os
-import analyze_resume
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# ✅ Configure Gemini API (USE ONLY ONE METHOD)
+genai.configure(api_key="YOUR_GEMINI_API_KEY")
 
 model = genai.GenerativeModel("gemini-pro")
 
-# Expanded skills database
-SKILLS_DB = {  "technical" : [
-    "python", "java", "c++", "javascript", "sql",
-    "machine learning", "data analysis", "html", "css",
-    "react", "angular", "node", "django", "flask",
-    "git", "mongodb", "excel", "power bi"
-],
-"business" : ["sales marketing", "sales", "management", "leadership", "teamwork"
-],
-"finance": [
-        "accounting", "financial analysis", "excel", "budgeting", "tax", "auditing"
+
+# ✅ Skills Database (proper structure)
+SKILLS_DB = {
+    "technical": [
+        "python", "java", "c++", "javascript", "sql",
+        "machine learning", "data analysis", "html", "css",
+        "react", "angular", "node", "django", "flask",
+        "git", "mongodb", "excel", "power bi"
     ],
-"general": [
-        "problem solving", "time management" "adaptability", "critical thinking"
-        ]
+    "business": [
+        "sales", "marketing", "management", "leadership", "teamwork"
+    ],
+    "finance": [
+        "accounting", "financial analysis", "budgeting", "tax", "auditing"
+    ],
+    "general": [
+        "problem solving", "time management", "adaptability", "critical thinking"
+    ]
 }
 
+
+# ✅ Extract text from PDF
 def extract_text_from_pdf(pdf_file):
     text = ""
     reader = PyPDF2.PdfReader(pdf_file)
+
     for page in reader.pages:
-        text += page.extract_text() or ""
+        extracted = page.extract_text()
+        if extracted:
+            text += extracted
+
     return text.lower()
 
 
+# ✅ Extract skills properly from DB
 def extract_skills(text):
     found_skills = []
-    for skill in SKILLS_DB:
-        if skill in text:
-            found_skills.append(skill)
+
+    for category in SKILLS_DB.values():
+        for skill in category:
+            if skill in text:
+                found_skills.append(skill)
+
     return list(set(found_skills))
 
 
+# ✅ Extract skills from job description
+def extract_jd_skills(job_description):
+    jd_skills = []
+
+    job_description = job_description.lower()
+
+    for category in SKILLS_DB.values():
+        for skill in category:
+            if skill in job_description:
+                jd_skills.append(skill)
+
+    return list(set(jd_skills))
+
+
+# ✅ Calculate similarity score
 def calculate_similarity(resume_text, job_description):
-    # TF-IDF based similarity (better than CountVectorizer)
     vectorizer = TfidfVectorizer(stop_words="english")
+
     tfidf = vectorizer.fit_transform([resume_text, job_description])
 
     score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
+
     return round(score * 100, 2)
 
 
-def analyze_resume(pdf_file, job_description):
-    text = extract_text_from_pdf(pdf_file)
+# ✅ Rule-based analyzer (fast + reliable)
+def analyze_resume_basic(resume_text, job_description):
+    skills = extract_skills(resume_text)
+    jd_skills = extract_jd_skills(job_description)
 
-    skills = extract_skills(text)
-
-    # Extract JD skills properly
-    jd_skills = [skill for skill in SKILLS_DB if skill in job_description.lower()]
     missing_skills = [skill for skill in jd_skills if skill not in skills]
 
-    score = calculate_similarity(text, job_description)
+    score = calculate_similarity(resume_text, job_description)
 
-    suggestions = []
-
-    # Smart suggestions
-
-genai.configure(api_key="YOUR_API_KEY")
-
-model = genai.GenerativeModel("gemini-pro")
+    return {
+        "score": score,
+        "matched_skills": skills,
+        "missing_skills": missing_skills
+    }
 
 
+# ✅ AI-based analysis (Gemini)
 def ai_resume_analysis(resume_text, job_description):
-
     prompt = f"""
-    You are an ATS system.
+You are an ATS (Applicant Tracking System).
 
-    Analyze this resume based on the job description.
+Analyze the resume based on the job description.
 
-    Resume:
-    {resume_text}
+Resume:
+{resume_text}
 
-    Job Description:
-    {job_description}
+Job Description:
+{job_description}
 
-    Give output in this format:
+Give output in this format:
 
-    Score: (0-100)
+Score (0-100):
+Strengths:
+- ...
+Missing Skills:
+- ...
+Suggestions:
+- ...
+"""
 
-    Strengths:
-    - ...
+    try:
+        response = model.generate_content(prompt)
+        return response.text
 
-    Missing Skills:
-    - ...
-
-    Suggestions:
-    - ...
-
-    Be smart and understand meaning, not just keywords.
-    """
-
-    response = model.generate_content(prompt)
-
-    return response.text
+    except Exception as e:
+        return f"Error in AI analysis: {str(e)}"
